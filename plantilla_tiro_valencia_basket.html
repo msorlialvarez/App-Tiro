@@ -17,7 +17,7 @@
     --grey:#737373; --line:#e5e5e5; --bg:#fafafa;
     --green:#16a34a; --green-bg:#f0fdf4; --green-border:#86efac;
     --red:#b91c1c; --red-bg:#fef2f2;
-    --blue:#2563eb; --purple:#9333ea;
+    --blue:#2563eb; --purple:#9333ea; --teal:#0d9488;
   }
   *{box-sizing:border-box;}
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:#171717;-webkit-tap-highlight-color:transparent;}
@@ -57,6 +57,7 @@
   .tipo-toggle{padding:9px;border-radius:10px;font-weight:700;font-size:13px;border:none;cursor:pointer;background:#f5f5f5;color:#525252;}
   .tipo-toggle.t2.active{background:var(--blue);color:#fff;}
   .tipo-toggle.t3.active{background:var(--purple);color:#fff;}
+  .tipo-toggle.tl.active{background:var(--teal);color:#fff;}
   .circles{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;}
   .circle{width:22px;height:22px;border-radius:999px;border:2px solid #d4d4d4;background:#fff;}
   .circle.made{background:#22c55e;border-color:#22c55e;}
@@ -85,11 +86,12 @@
   .cell-empty{color:#a3a3a3;}
   .summary-toggle{width:100%;display:flex;justify-content:space-between;align-items:center;padding:12px 16px;font-weight:700;font-size:14px;background:none;border:none;cursor:pointer;}
   .settings-toggle{width:100%;display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:14px;background:none;border:none;cursor:pointer;margin-bottom:8px;padding:0;}
-  .settings-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:12px;}
+  .settings-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px;}
   .settings-grid label{font-size:11px;color:var(--grey);display:block;margin-bottom:2px;}
   .btn-export{width:100%;background:var(--orange);color:#fff;padding:10px;border-radius:10px;font-weight:700;border:none;cursor:pointer;margin-bottom:8px;}
   .btn-clear{width:100%;background:none;border:none;color:#a3a3a3;font-size:11px;padding:4px;cursor:pointer;}
   .error-banner{background:var(--red-bg);border:1px solid #fca5a5;color:var(--red);font-size:12px;border-radius:10px;padding:8px 12px;}
+  .day-badge{background:#fff7ed;border:1px solid #fed7aa;color:#c2410c;font-size:12px;font-weight:700;border-radius:10px;padding:8px 12px;text-align:center;}
 </style>
 </head>
 <body>
@@ -249,7 +251,8 @@ var XlsxWriter = (function () {
 if (typeof module !== "undefined") { module.exports = XlsxWriter; }
 
 
-/* Builds a styled .xlsx (Uint8Array) for the shooting tracker, using XlsxWriter core (no deps). */
+/* Builds a multi-sheet, styled .xlsx (Uint8Array) for the shooting tracker: one sheet per
+   training day + one TOTAL sheet with the accumulated sums. No external dependencies. */
 var buildShootingXlsx = (function () {
   "use strict";
   var XW = (typeof XlsxWriter !== "undefined") ? XlsxWriter : require("./xlsx-core.js");
@@ -257,62 +260,61 @@ var buildShootingXlsx = (function () {
   var SERIES_COUNT = 12;
 
   function buildStylesXml() {
-    // Fonts
     var fonts = [
-      '<font><sz val="10"/><color rgb="FF1A1A1A"/><name val="Arial"/></font>',                          // 0 default
-      '<font><b/><sz val="14"/><color rgb="FFFFFFFF"/><name val="Arial"/></font>',                       // 1 title
-      '<font><b/><sz val="9"/><color rgb="FFFFFFFF"/><name val="Arial"/></font>',                        // 2 group header
-      '<font><b/><sz val="8"/><color rgb="FFFFFFFF"/><name val="Arial"/></font>',                        // 3 sub header
-      '<font><b/><sz val="9.5"/><color rgb="FF1A1A1A"/><name val="Arial"/></font>',                      // 4 player name / total bold
-      '<font><sz val="9"/><color rgb="FF1A1A1A"/><name val="Arial"/></font>',                            // 5 normal
-      '<font><b/><sz val="9"/><color rgb="FF006100"/><name val="Arial"/></font>',                        // 6 green pct
-      '<font><b/><sz val="9"/><color rgb="FF9C0006"/><name val="Arial"/></font>',                        // 7 red pct
-      '<font><b/><sz val="9"/><color rgb="FF1F4E78"/><name val="Arial"/></font>',                        // 8 tipo T2
-      '<font><b/><sz val="9"/><color rgb="FF6B21A8"/><name val="Arial"/></font>',                        // 9 tipo T3
-      '<font><i/><sz val="8.5"/><color rgb="FF737373"/><name val="Arial"/></font>',                      // 10 legend
-      '<font><sz val="9"/><color rgb="FFAAAAAA"/><name val="Arial"/></font>'                             // 11 empty dash
+      '<font><sz val="10"/><color rgb="FF1A1A1A"/><name val="Arial"/></font>',
+      '<font><b/><sz val="14"/><color rgb="FFFFFFFF"/><name val="Arial"/></font>',
+      '<font><b/><sz val="9"/><color rgb="FFFFFFFF"/><name val="Arial"/></font>',
+      '<font><b/><sz val="8"/><color rgb="FFFFFFFF"/><name val="Arial"/></font>',
+      '<font><b/><sz val="9.5"/><color rgb="FF1A1A1A"/><name val="Arial"/></font>',
+      '<font><sz val="9"/><color rgb="FF1A1A1A"/><name val="Arial"/></font>',
+      '<font><b/><sz val="9"/><color rgb="FF006100"/><name val="Arial"/></font>',
+      '<font><b/><sz val="9"/><color rgb="FF9C0006"/><name val="Arial"/></font>',
+      '<font><b/><sz val="9"/><color rgb="FF1F4E78"/><name val="Arial"/></font>',
+      '<font><b/><sz val="9"/><color rgb="FF6B21A8"/><name val="Arial"/></font>',
+      '<font><i/><sz val="8.5"/><color rgb="FF737373"/><name val="Arial"/></font>',
+      '<font><sz val="9"/><color rgb="FFAAAAAA"/><name val="Arial"/></font>',
+      '<font><b/><sz val="14"/><color rgb="FF9A3B12"/><name val="Arial"/></font>',
+      '<font><b/><sz val="9"/><color rgb="FF0F766E"/><name val="Arial"/></font>'
     ];
-
-    // Fills (0 and 1 are reserved defaults per OOXML spec)
     var fills = [
       '<fill><patternFill patternType="none"/></fill>',
       '<fill><patternFill patternType="gray125"/></fill>',
-      '<fill><patternFill patternType="solid"><fgColor rgb="FFF26522"/><bgColor indexed="64"/></patternFill></fill>',   // 2 orange (title)
-      '<fill><patternFill patternType="solid"><fgColor rgb="FF1A1A1A"/><bgColor indexed="64"/></patternFill></fill>',   // 3 black (group header)
-      '<fill><patternFill patternType="solid"><fgColor rgb="FF3D3D3D"/><bgColor indexed="64"/></patternFill></fill>',   // 4 dark grey (sub header)
-      '<fill><patternFill patternType="solid"><fgColor rgb="FFF2F2F2"/><bgColor indexed="64"/></patternFill></fill>',   // 5 light grey (totals)
-      '<fill><patternFill patternType="solid"><fgColor rgb="FFC6EFCE"/><bgColor indexed="64"/></patternFill></fill>',   // 6 green
-      '<fill><patternFill patternType="solid"><fgColor rgb="FFFFC7CE"/><bgColor indexed="64"/></patternFill></fill>'    // 7 red
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFF26522"/><bgColor indexed="64"/></patternFill></fill>',
+      '<fill><patternFill patternType="solid"><fgColor rgb="FF1A1A1A"/><bgColor indexed="64"/></patternFill></fill>',
+      '<fill><patternFill patternType="solid"><fgColor rgb="FF3D3D3D"/><bgColor indexed="64"/></patternFill></fill>',
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFF2F2F2"/><bgColor indexed="64"/></patternFill></fill>',
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFC6EFCE"/><bgColor indexed="64"/></patternFill></fill>',
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFFFC7CE"/><bgColor indexed="64"/></patternFill></fill>',
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFFFE4CC"/><bgColor indexed="64"/></patternFill></fill>'
     ];
-
     var thin = '<left style="thin"><color rgb="FFD9D9D9"/></left><right style="thin"><color rgb="FFD9D9D9"/></right><top style="thin"><color rgb="FFD9D9D9"/></top><bottom style="thin"><color rgb="FFD9D9D9"/></bottom>';
     var borders = [
-      '<border><left/><right/><top/><bottom/><diagonal/></border>',                 // 0 none
-      '<border>' + thin + '<diagonal/></border>'                                    // 1 thin all
+      '<border><left/><right/><top/><bottom/><diagonal/></border>',
+      '<border>' + thin + '<diagonal/></border>'
     ];
-
     var numFmts = '<numFmts count="1"><numFmt numFmtId="164" formatCode="0%"/></numFmts>';
 
-    // cellXfs — index matters, referenced by cell "s" attribute
     var xfs = [
-      '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>', // 0 default
-      '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center" indent="1"/></xf>', // 1 title
-      '<xf numFmtId="0" fontId="2" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>', // 2 group header
-      '<xf numFmtId="0" fontId="3" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>', // 3 sub header
-      '<xf numFmtId="0" fontId="4" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" indent="1"/></xf>', // 4 player name
-      '<xf numFmtId="0" fontId="5" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>', // 5 number cell
-      '<xf numFmtId="164" fontId="5" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>', // 6 pct neutral
-      '<xf numFmtId="164" fontId="6" fillId="6" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>', // 7 pct green
-      '<xf numFmtId="164" fontId="7" fillId="7" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>', // 8 pct red
-      '<xf numFmtId="0" fontId="4" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>', // 9 total number
-      '<xf numFmtId="164" fontId="4" fillId="5" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>', // 10 total pct neutral
-      '<xf numFmtId="164" fontId="6" fillId="6" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>', // 11 total pct green (same visual as 7, kept separate for clarity)
-      '<xf numFmtId="164" fontId="7" fillId="7" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>', // 12 total pct red
-      '<xf numFmtId="0" fontId="8" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>', // 13 tipo T2
-      '<xf numFmtId="0" fontId="9" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>', // 14 tipo T3
-      '<xf numFmtId="0" fontId="11" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>', // 15 empty dash
-      '<xf numFmtId="0" fontId="10" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="left" vertical="center" indent="1"/></xf>', // 16 legend text
-      '<xf numFmtId="0" fontId="4" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' // 17 series-count number (bold centered)
+      '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>',
+      '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center" indent="1"/></xf>',
+      '<xf numFmtId="0" fontId="2" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>',
+      '<xf numFmtId="0" fontId="3" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>',
+      '<xf numFmtId="0" fontId="4" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" indent="1"/></xf>',
+      '<xf numFmtId="0" fontId="5" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
+      '<xf numFmtId="164" fontId="5" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
+      '<xf numFmtId="164" fontId="6" fillId="6" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
+      '<xf numFmtId="164" fontId="7" fillId="7" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
+      '<xf numFmtId="0" fontId="4" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
+      '<xf numFmtId="164" fontId="4" fillId="5" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
+      '<xf numFmtId="164" fontId="6" fillId="6" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
+      '<xf numFmtId="164" fontId="7" fillId="7" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
+      '<xf numFmtId="0" fontId="8" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
+      '<xf numFmtId="0" fontId="9" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
+      '<xf numFmtId="0" fontId="11" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
+      '<xf numFmtId="0" fontId="10" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="left" vertical="center" indent="1"/></xf>',
+      '<xf numFmtId="0" fontId="4" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
+      '<xf numFmtId="0" fontId="12" fillId="8" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center" indent="1"/></xf>',
+      '<xf numFmtId="0" fontId="13" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>'
     ];
 
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -328,10 +330,10 @@ var buildShootingXlsx = (function () {
   }
 
   var STYLE = {
-    TITLE: 1, GROUP: 2, SUB: 3, NAME: 4, NUM: 5,
+    TITLE: 1, TITLE_TOTAL: 18, GROUP: 2, SUB: 3, NAME: 4, NUM: 5,
     PCT_NEUTRAL: 6, PCT_GREEN: 7, PCT_RED: 8,
     TOTAL_NUM: 9, TOTAL_PCT_NEUTRAL: 10, TOTAL_PCT_GREEN: 11, TOTAL_PCT_RED: 12,
-    TIPO_T2: 13, TIPO_T3: 14, DASH: 15, LEGEND: 16, SERIES_NUM: 17
+    TIPO_T2: 13, TIPO_T3: 14, DASH: 15, LEGEND: 16, SERIES_NUM: 17, TIPO_TL: 19
   };
 
   function cellStr(colLetter, row, style, text) {
@@ -344,24 +346,26 @@ var buildShootingXlsx = (function () {
     return '<c r="' + colLetter + row + '" s="' + style + '"/>';
   }
 
-  function buildSheetXml(state) {
-    var players = state.players;
-    var objetivos = state.objetivos;
-    var data = state.data;
+  function totalsForBucket(pdata, tipo) {
+    var ac = 0, int = 0;
+    Object.keys(pdata || {}).forEach(function (k) {
+      var v = pdata[k];
+      if (v.tipo === tipo) { ac += v.ac; int += v.int; }
+    });
+    return { ac: ac, int: int, pct: int > 0 ? ac / int : null };
+  }
 
+  function buildDaySheetXml(players, objetivos, dayData, dateLabel) {
     var SERIES = [];
     for (var i = 1; i <= SERIES_COUNT; i++) SERIES.push("Serie " + i);
 
-    // column layout
-    // A: Jugadora, B: Series tiradas
-    // then 12 series x 4 cols (Tipo, Ac, Int, %)
-    // then Total T2 (Ac,Int,%), Total T3 (Ac,Int,%), Total General (Ac,Int,%)
     var NAME_COL = 1, COUNT_COL = 2;
     var SERIES_START = 3;
     var SERIES_END = SERIES_START + SERIES_COUNT * 4 - 1;
     var TOT_T2_START = SERIES_END + 1;
     var TOT_T3_START = TOT_T2_START + 3;
-    var TOT_GEN_START = TOT_T3_START + 3;
+    var TOT_TL_START = TOT_T3_START + 3;
+    var TOT_GEN_START = TOT_TL_START + 3;
     var LAST_COL = TOT_GEN_START + 2;
 
     var ROW_TITLE = 1, ROW_LEGEND = 2, ROW_GROUP = 3, ROW_SUB = 4, FIRST_DATA_ROW = 5;
@@ -370,25 +374,21 @@ var buildShootingXlsx = (function () {
     var rowsXml = [];
     var merges = [];
 
-    // ---- row 1: title ----
-    var titleCells = cellStr("A", ROW_TITLE, STYLE.TITLE, "PLANTILLA DE TIRO \u00b7 VALENCIA BASKET");
+    var titleCells = cellStr("A", ROW_TITLE, STYLE.TITLE, "ENTRENAMIENTO \u00b7 " + dateLabel + " \u00b7 VALENCIA BASKET");
     for (var tc = 2; tc <= LAST_COL; tc++) titleCells += cellBlank(XW.colLetter(tc), ROW_TITLE, STYLE.TITLE);
     rowsXml.push('<row r="' + ROW_TITLE + '" ht="22">' + titleCells + '</row>');
     merges.push("A" + ROW_TITLE + ":" + XW.colLetter(LAST_COL) + ROW_TITLE);
 
-    // ---- row 2: legend ----
     var legendTxt = "Verde = objetivo cumplido \u00b7 Rojo = objetivo no alcanzado \u00b7 Objetivo T2: " +
-      Math.round(objetivos.t2 * 100) + "% \u00b7 Objetivo T3: " + Math.round(objetivos.t3 * 100) + "%";
+      Math.round(objetivos.t2 * 100) + "% \u00b7 Objetivo T3: " + Math.round(objetivos.t3 * 100) +
+      "% \u00b7 Objetivo TL: " + Math.round(objetivos.tl * 100) + "%";
     var legendCells = cellStr("A", ROW_LEGEND, STYLE.LEGEND, legendTxt);
     for (var lc = 2; lc <= LAST_COL; lc++) legendCells += cellBlank(XW.colLetter(lc), ROW_LEGEND, STYLE.LEGEND);
     rowsXml.push('<row r="' + ROW_LEGEND + '" ht="14">' + legendCells + '</row>');
     merges.push("A" + ROW_LEGEND + ":" + XW.colLetter(LAST_COL) + ROW_LEGEND);
 
-    // ---- row 3+4: headers ----
     var groupCells = "";
     var subCells = "";
-
-    // Jugadora (vertical merge rows 3-4)
     groupCells += cellStr(XW.colLetter(NAME_COL), ROW_GROUP, STYLE.GROUP, "JUGADORA");
     merges.push(XW.cellRef(NAME_COL, ROW_GROUP) + ":" + XW.cellRef(NAME_COL, ROW_SUB));
     subCells += cellBlank(XW.colLetter(NAME_COL), ROW_SUB, STYLE.GROUP);
@@ -409,7 +409,7 @@ var buildShootingXlsx = (function () {
       col += 4;
     });
 
-    [[TOT_T2_START, "TOTAL T2"], [TOT_T3_START, "TOTAL T3"], [TOT_GEN_START, "TOTAL GENERAL"]].forEach(function (pair) {
+    [[TOT_T2_START, "TOTAL T2"], [TOT_T3_START, "TOTAL T3"], [TOT_TL_START, "TOTAL TL"], [TOT_GEN_START, "TOTAL GENERAL"]].forEach(function (pair) {
       var start = pair[0], label = pair[1];
       groupCells += cellStr(XW.colLetter(start), ROW_GROUP, STYLE.GROUP, label);
       groupCells += cellBlank(XW.colLetter(start + 1), ROW_GROUP, STYLE.GROUP);
@@ -423,27 +423,12 @@ var buildShootingXlsx = (function () {
     rowsXml.push('<row r="' + ROW_GROUP + '" ht="20">' + groupCells + '</row>');
     rowsXml.push('<row r="' + ROW_SUB + '" ht="14">' + subCells + '</row>');
 
-    // ---- data rows ----
-    function totalsFor(playerId, tipo) {
-      var pdata = data[playerId] || {};
-      var ac = 0, int = 0;
-      Object.keys(pdata).forEach(function (k) {
-        var v = pdata[k];
-        if (v.tipo === tipo) { ac += v.ac; int += v.int; }
-      });
-      return { ac: ac, int: int, pct: int > 0 ? ac / int : null };
-    }
-
     players.forEach(function (p, idx) {
       var row = FIRST_DATA_ROW + idx;
-      var pdata = data[p.id] || {};
+      var pdata = (dayData || {})[p.id] || {};
 
-      // pase 1: solo calcular cuántas series tiene tiradas (sin escribir celdas todavía,
-      // para poder mantener las celdas de la fila en estricto orden de columna A,B,C,D...)
       var seriesCount = 0;
-      SERIES.forEach(function (label) {
-        if (pdata[label]) seriesCount++;
-      });
+      SERIES.forEach(function (label) { if (pdata[label]) seriesCount++; });
 
       var cells = "";
       cells += cellStr(XW.colLetter(NAME_COL), row, STYLE.NAME, p.name);
@@ -454,12 +439,12 @@ var buildShootingXlsx = (function () {
         var v = pdata[label];
         var tipoCol = XW.colLetter(c2), acCol = XW.colLetter(c2 + 1), intCol = XW.colLetter(c2 + 2), pctCol = XW.colLetter(c2 + 3);
         if (v) {
-          var tipoStyle = v.tipo === "T2" ? STYLE.TIPO_T2 : STYLE.TIPO_T3;
+          var tipoStyle = v.tipo === "T2" ? STYLE.TIPO_T2 : (v.tipo === "T3" ? STYLE.TIPO_T3 : STYLE.TIPO_TL);
           cells += cellStr(tipoCol, row, tipoStyle, v.tipo);
           cells += cellNum(acCol, row, STYLE.NUM, v.ac);
           cells += cellNum(intCol, row, STYLE.NUM, v.int);
           var pctVal = v.int > 0 ? v.ac / v.int : 0;
-          var target = v.tipo === "T2" ? objetivos.t2 : objetivos.t3;
+          var target = v.tipo === "T2" ? objetivos.t2 : (v.tipo === "T3" ? objetivos.t3 : objetivos.tl);
           var pctStyle = v.int === 0 ? STYLE.PCT_NEUTRAL : (pctVal >= target ? STYLE.PCT_GREEN : STYLE.PCT_RED);
           cells += cellNum(pctCol, row, pctStyle, pctVal);
         } else {
@@ -485,31 +470,29 @@ var buildShootingXlsx = (function () {
         return s;
       }
 
-      var t2 = totalsFor(p.id, "T2"), t3 = totalsFor(p.id, "T3");
-      var genAc = t2.ac + t3.ac, genInt = t2.int + t3.int;
-      var gen = { ac: genAc, int: genInt, pct: genInt > 0 ? genAc / genInt : null };
+      var t2 = totalsForBucket(pdata, "T2"), t3 = totalsForBucket(pdata, "T3"), tl = totalsForBucket(pdata, "TL");
+      var gen = { ac: t2.ac + t3.ac + tl.ac, int: t2.int + t3.int + tl.int };
+      gen.pct = gen.int > 0 ? gen.ac / gen.int : null;
 
       cells += totalCells(TOT_T2_START, t2, objetivos.t2, true);
       cells += totalCells(TOT_T3_START, t3, objetivos.t3, true);
+      cells += totalCells(TOT_TL_START, tl, objetivos.tl, true);
       cells += totalCells(TOT_GEN_START, gen, null, false);
 
       rowsXml.push('<row r="' + row + '" ht="15">' + cells + '</row>');
     });
 
-    // ---- columns widths ----
-    var colsXml = '<cols>';
-    colsXml += '<col min="' + NAME_COL + '" max="' + NAME_COL + '" width="24" customWidth="1"/>';
-    colsXml += '<col min="' + COUNT_COL + '" max="' + COUNT_COL + '" width="10" customWidth="1"/>';
-    colsXml += '<col min="' + SERIES_START + '" max="' + LAST_COL + '" width="6.2" customWidth="1"/>';
-    colsXml += '</cols>';
+    var colsXml = '<cols>' +
+      '<col min="' + NAME_COL + '" max="' + NAME_COL + '" width="24" customWidth="1"/>' +
+      '<col min="' + COUNT_COL + '" max="' + COUNT_COL + '" width="10" customWidth="1"/>' +
+      '<col min="' + SERIES_START + '" max="' + LAST_COL + '" width="6.2" customWidth="1"/>' +
+      '</cols>';
 
     var mergeXml = '<mergeCells count="' + merges.length + '">' +
-      merges.map(function (m) { return '<mergeCell ref="' + m + '"/>'; }).join("") +
-      '</mergeCells>';
+      merges.map(function (m) { return '<mergeCell ref="' + m + '"/>'; }).join("") + '</mergeCells>';
 
     var freezeCol = XW.colLetter(SERIES_START);
-    var paneXml = '<pane xSplit="2" ySplit="' + ROW_SUB + '" topLeftCell="' + freezeCol + (FIRST_DATA_ROW) + '" activePane="bottomRight" state="frozen"/>';
-
+    var paneXml = '<pane xSplit="2" ySplit="' + ROW_SUB + '" topLeftCell="' + freezeCol + FIRST_DATA_ROW + '" activePane="bottomRight" state="frozen"/>';
     var dimension = "A1:" + XW.colLetter(LAST_COL) + lastDataRow;
 
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -523,48 +506,200 @@ var buildShootingXlsx = (function () {
       '</worksheet>';
   }
 
-  function buildWorkbookXml() {
+  function buildTotalSheetXml(players, objetivos, allSessions, sessionDates) {
+    var NAME_COL = 1, TRAIN_COL = 2;
+    var TOT_T2_START = 3, TOT_T3_START = 6, TOT_TL_START = 9, TOT_GEN_START = 12;
+    var LAST_COL = TOT_GEN_START + 2;
+
+    var ROW_TITLE = 1, ROW_LEGEND = 2, ROW_GROUP = 3, ROW_SUB = 4, FIRST_DATA_ROW = 5;
+    var lastDataRow = FIRST_DATA_ROW + players.length - 1;
+
+    var rowsXml = [];
+    var merges = [];
+
+    var titleTxt = "TOTAL ACUMULADO \u00b7 " + sessionDates.length + " ENTRENAMIENTO" + (sessionDates.length === 1 ? "" : "S") + " \u00b7 VALENCIA BASKET";
+    var titleCells = cellStr("A", ROW_TITLE, STYLE.TITLE_TOTAL, titleTxt);
+    for (var tc = 2; tc <= LAST_COL; tc++) titleCells += cellBlank(XW.colLetter(tc), ROW_TITLE, STYLE.TITLE_TOTAL);
+    rowsXml.push('<row r="' + ROW_TITLE + '" ht="22">' + titleCells + '</row>');
+    merges.push("A" + ROW_TITLE + ":" + XW.colLetter(LAST_COL) + ROW_TITLE);
+
+    var legendTxt = "Suma de todos los d\u00edas registrados \u00b7 Verde = objetivo cumplido \u00b7 Rojo = objetivo no alcanzado \u00b7 Objetivo T2: " +
+      Math.round(objetivos.t2 * 100) + "% \u00b7 Objetivo T3: " + Math.round(objetivos.t3 * 100) +
+      "% \u00b7 Objetivo TL: " + Math.round(objetivos.tl * 100) + "%";
+    var legendCells = cellStr("A", ROW_LEGEND, STYLE.LEGEND, legendTxt);
+    for (var lc = 2; lc <= LAST_COL; lc++) legendCells += cellBlank(XW.colLetter(lc), ROW_LEGEND, STYLE.LEGEND);
+    rowsXml.push('<row r="' + ROW_LEGEND + '" ht="14">' + legendCells + '</row>');
+    merges.push("A" + ROW_LEGEND + ":" + XW.colLetter(LAST_COL) + ROW_LEGEND);
+
+    var groupCells = "", subCells = "";
+    groupCells += cellStr(XW.colLetter(NAME_COL), ROW_GROUP, STYLE.GROUP, "JUGADORA");
+    merges.push(XW.cellRef(NAME_COL, ROW_GROUP) + ":" + XW.cellRef(NAME_COL, ROW_SUB));
+    subCells += cellBlank(XW.colLetter(NAME_COL), ROW_SUB, STYLE.GROUP);
+
+    groupCells += cellStr(XW.colLetter(TRAIN_COL), ROW_GROUP, STYLE.GROUP, "ENTRENAMIENTOS");
+    merges.push(XW.cellRef(TRAIN_COL, ROW_GROUP) + ":" + XW.cellRef(TRAIN_COL, ROW_SUB));
+    subCells += cellBlank(XW.colLetter(TRAIN_COL), ROW_SUB, STYLE.GROUP);
+
+    [[TOT_T2_START, "TOTAL T2"], [TOT_T3_START, "TOTAL T3"], [TOT_TL_START, "TOTAL TL"], [TOT_GEN_START, "TOTAL GENERAL"]].forEach(function (pair) {
+      var start = pair[0], label = pair[1];
+      groupCells += cellStr(XW.colLetter(start), ROW_GROUP, STYLE.GROUP, label);
+      groupCells += cellBlank(XW.colLetter(start + 1), ROW_GROUP, STYLE.GROUP);
+      groupCells += cellBlank(XW.colLetter(start + 2), ROW_GROUP, STYLE.GROUP);
+      merges.push(XW.cellRef(start, ROW_GROUP) + ":" + XW.cellRef(start + 2, ROW_GROUP));
+      subCells += cellStr(XW.colLetter(start), ROW_SUB, STYLE.SUB, "Ac.");
+      subCells += cellStr(XW.colLetter(start + 1), ROW_SUB, STYLE.SUB, "Int.");
+      subCells += cellStr(XW.colLetter(start + 2), ROW_SUB, STYLE.SUB, "%");
+    });
+
+    rowsXml.push('<row r="' + ROW_GROUP + '" ht="20">' + groupCells + '</row>');
+    rowsXml.push('<row r="' + ROW_SUB + '" ht="14">' + subCells + '</row>');
+
+    players.forEach(function (p, idx) {
+      var row = FIRST_DATA_ROW + idx;
+      var t2 = { ac: 0, int: 0 }, t3 = { ac: 0, int: 0 }, tl = { ac: 0, int: 0 };
+      var trainCount = 0;
+
+      sessionDates.forEach(function (date) {
+        var pdata = (allSessions[date] || {})[p.id];
+        if (pdata && Object.keys(pdata).length > 0) {
+          trainCount++;
+          var dt2 = totalsForBucket(pdata, "T2"), dt3 = totalsForBucket(pdata, "T3"), dtl = totalsForBucket(pdata, "TL");
+          t2.ac += dt2.ac; t2.int += dt2.int;
+          t3.ac += dt3.ac; t3.int += dt3.int;
+          tl.ac += dtl.ac; tl.int += dtl.int;
+        }
+      });
+      t2.pct = t2.int > 0 ? t2.ac / t2.int : null;
+      t3.pct = t3.int > 0 ? t3.ac / t3.int : null;
+      tl.pct = tl.int > 0 ? tl.ac / tl.int : null;
+      var gen = { ac: t2.ac + t3.ac + tl.ac, int: t2.int + t3.int + tl.int };
+      gen.pct = gen.int > 0 ? gen.ac / gen.int : null;
+
+      var cells = "";
+      cells += cellStr(XW.colLetter(NAME_COL), row, STYLE.NAME, p.name);
+      cells += cellNum(XW.colLetter(TRAIN_COL), row, STYLE.SERIES_NUM, trainCount);
+
+      function totalCells(start, tot, obj, colorize) {
+        var acCol = XW.colLetter(start), intCol = XW.colLetter(start + 1), pctCol = XW.colLetter(start + 2);
+        var s = cellNum(acCol, row, STYLE.TOTAL_NUM, tot.ac) + cellNum(intCol, row, STYLE.TOTAL_NUM, tot.int);
+        if (tot.int === 0) {
+          s += cellStr(pctCol, row, STYLE.TOTAL_PCT_NEUTRAL, "\u2014");
+        } else if (!colorize) {
+          s += cellNum(pctCol, row, STYLE.TOTAL_PCT_NEUTRAL, tot.pct);
+        } else {
+          var style = tot.pct >= obj ? STYLE.TOTAL_PCT_GREEN : STYLE.TOTAL_PCT_RED;
+          s += cellNum(pctCol, row, style, tot.pct);
+        }
+        return s;
+      }
+
+      cells += totalCells(TOT_T2_START, t2, objetivos.t2, true);
+      cells += totalCells(TOT_T3_START, t3, objetivos.t3, true);
+      cells += totalCells(TOT_TL_START, tl, objetivos.tl, true);
+      cells += totalCells(TOT_GEN_START, gen, null, false);
+
+      rowsXml.push('<row r="' + row + '" ht="15">' + cells + '</row>');
+    });
+
+    var colsXml = '<cols>' +
+      '<col min="' + NAME_COL + '" max="' + NAME_COL + '" width="24" customWidth="1"/>' +
+      '<col min="' + TRAIN_COL + '" max="' + TRAIN_COL + '" width="17" customWidth="1"/>' +
+      '<col min="' + TOT_T2_START + '" max="' + LAST_COL + '" width="8" customWidth="1"/>' +
+      '</cols>';
+
+    var mergeXml = '<mergeCells count="' + merges.length + '">' +
+      merges.map(function (m) { return '<mergeCell ref="' + m + '"/>'; }).join("") + '</mergeCells>';
+    var dimension = "A1:" + XW.colLetter(LAST_COL) + lastDataRow;
+
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
-      '<sheets><sheet name="Tiro" sheetId="1" r:id="rId1"/></sheets>' +
-      '</workbook>';
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+      '<dimension ref="' + dimension + '"/>' +
+      '<sheetViews><sheetView workbookViewId="0" showGridLines="0"/></sheetViews>' +
+      '<sheetFormatPr defaultRowHeight="15"/>' +
+      colsXml +
+      '<sheetData>' + rowsXml.join("") + '</sheetData>' +
+      mergeXml +
+      '</worksheet>';
   }
 
-  function buildContentTypesXml() {
+  function fmtDateLabel(dateStr) {
+    var parts = dateStr.split("-");
+    if (parts.length !== 3) return dateStr;
+    return parts[2] + "/" + parts[1] + "/" + parts[0];
+  }
+  function safeSheetName(dateStr) {
+    return fmtDateLabel(dateStr).replace(/\//g, "-");
+  }
+
+  function buildContentTypesXml(sheetCount) {
+    var overrides = '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>';
+    for (var i = 1; i <= sheetCount; i++) {
+      overrides += '<Override PartName="/xl/worksheets/sheet' + i + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';
+    }
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
       '<Default Extension="xml" ContentType="application/xml"/>' +
-      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
-      '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
-      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+      overrides +
       '</Types>';
   }
-
   function buildRootRelsXml() {
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
       '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
       '</Relationships>';
   }
-
-  function buildWorkbookRelsXml() {
+  function buildWorkbookXml(sheetNames) {
+    var sheetsXml = sheetNames.map(function (name, i) {
+      return '<sheet name="' + XW.xesc(name) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>';
+    }).join("");
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
-      '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
-      '</Relationships>';
+      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+      '<sheets>' + sheetsXml + '</sheets>' +
+      '</workbook>';
+  }
+  function buildWorkbookRelsXml(sheetCount) {
+    var rels = "";
+    for (var i = 1; i <= sheetCount; i++) {
+      rels += '<Relationship Id="rId' + i + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' + i + '.xml"/>';
+    }
+    rels += '<Relationship Id="rId' + (sheetCount + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>';
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + rels + '</Relationships>';
   }
 
   function build(state) {
+    var players = state.players;
+    var objetivos = state.objetivos;
+    var allSessions = state.data || {};
+    var sessionDates = Object.keys(allSessions).sort();
+
+    var sheetNames = ["TOTAL"];
+    var sheetXmls = [buildTotalSheetXml(players, objetivos, allSessions, sessionDates)];
+
+    sessionDates.forEach(function (date) {
+      sheetNames.push(safeSheetName(date));
+      sheetXmls.push(buildDaySheetXml(players, objetivos, allSessions[date], fmtDateLabel(date)));
+    });
+
+    if (sessionDates.length === 0) {
+      var todayLabel = fmtDateLabel(new Date().toISOString().slice(0, 10));
+      sheetNames.push(todayLabel.replace(/\//g, "-"));
+      sheetXmls.push(buildDaySheetXml(players, objetivos, {}, todayLabel));
+    }
+
     var files = [
-      { name: "[Content_Types].xml", data: XW.strToUtf8Bytes(buildContentTypesXml()) },
+      { name: "[Content_Types].xml", data: XW.strToUtf8Bytes(buildContentTypesXml(sheetXmls.length)) },
       { name: "_rels/.rels", data: XW.strToUtf8Bytes(buildRootRelsXml()) },
-      { name: "xl/workbook.xml", data: XW.strToUtf8Bytes(buildWorkbookXml()) },
-      { name: "xl/_rels/workbook.xml.rels", data: XW.strToUtf8Bytes(buildWorkbookRelsXml()) },
-      { name: "xl/styles.xml", data: XW.strToUtf8Bytes(buildStylesXml()) },
-      { name: "xl/worksheets/sheet1.xml", data: XW.strToUtf8Bytes(buildSheetXml(state)) }
+      { name: "xl/workbook.xml", data: XW.strToUtf8Bytes(buildWorkbookXml(sheetNames)) },
+      { name: "xl/_rels/workbook.xml.rels", data: XW.strToUtf8Bytes(buildWorkbookRelsXml(sheetXmls.length)) },
+      { name: "xl/styles.xml", data: XW.strToUtf8Bytes(buildStylesXml()) }
     ];
+    sheetXmls.forEach(function (xml, i) {
+      files.push({ name: "xl/worksheets/sheet" + (i + 1) + ".xml", data: XW.strToUtf8Bytes(xml) });
+    });
+
     return XW.buildZip(files);
   }
 
@@ -594,7 +729,7 @@ for (var n = 0; n <= 10; n++) NUMBERS.push(n);
 var state = {
   players: DEFAULT_PLAYER_NAMES.map(function (name, i) { return { id: "p" + i, name: name }; }),
   data: {},
-  objetivos: { t2: 0.7, t3: 0.5 },
+  objetivos: { t2: 0.7, t3: 0.5, tl: 0.8 },
   selectedPlayerId: null,
   serieIdx: 0,
   acInput: 0,
@@ -614,7 +749,7 @@ function loadState() {
       var parsed = JSON.parse(raw);
       if (parsed.players && parsed.players.length) state.players = parsed.players;
       if (parsed.data) state.data = parsed.data;
-      if (parsed.objetivos) state.objetivos = parsed.objetivos;
+      if (parsed.objetivos) state.objetivos = Object.assign({ t2: 0.7, t3: 0.5, tl: 0.8 }, parsed.objetivos);
       if (parsed.selectedPlayerId) state.selectedPlayerId = parsed.selectedPlayerId;
       if (parsed.currentTipo) state.currentTipo = parsed.currentTipo;
     }
@@ -631,14 +766,27 @@ function saveState() {
 }
 
 // ---------- helpers ----------
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function todayLabel() {
+  var p = todayStr().split("-");
+  return p[2] + "/" + p[1] + "/" + p[0];
+}
+function todayBucket() {
+  if (!state.data[todayStr()]) state.data[todayStr()] = {};
+  return state.data[todayStr()];
+}
 function currentSerieLabel() { return SERIES[state.serieIdx]; }
-function target() { return state.currentTipo === "T2" ? state.objetivos.t2 : state.objetivos.t3; }
+function target() {
+  if (state.currentTipo === "T2") return state.objetivos.t2;
+  if (state.currentTipo === "T3") return state.objetivos.t3;
+  return state.objetivos.tl;
+}
 function pct() { return state.intInput > 0 ? state.acInput / state.intInput : 0; }
 function reached() { return state.intInput > 0 && pct() >= target(); }
 function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
 
 function totalsFor(playerId, tipo) {
-  var pdata = state.data[playerId] || {};
+  var pdata = todayBucket()[playerId] || {};
   var ac = 0, int = 0;
   Object.keys(pdata).forEach(function (k) {
     var v = pdata[k];
@@ -647,14 +795,14 @@ function totalsFor(playerId, tipo) {
   return { ac: ac, int: int, pct: int > 0 ? ac / int : null };
 }
 function generalFor(playerId) {
-  var t2 = totalsFor(playerId, "T2"), t3 = totalsFor(playerId, "T3");
-  var ac = t2.ac + t3.ac, int = t2.int + t3.int;
+  var t2 = totalsFor(playerId, "T2"), t3 = totalsFor(playerId, "T3"), tl = totalsFor(playerId, "TL");
+  var ac = t2.ac + t3.ac + tl.ac, int = t2.int + t3.int + tl.int;
   return { ac: ac, int: int, pct: int > 0 ? ac / int : null };
 }
 
 function loadSerieValues() {
   if (!state.selectedPlayerId) { state.acInput = 0; state.intInput = 10; return; }
-  var existing = (state.data[state.selectedPlayerId] || {})[currentSerieLabel()];
+  var existing = (todayBucket()[state.selectedPlayerId] || {})[currentSerieLabel()];
   if (existing) {
     state.acInput = existing.ac; state.intInput = existing.int; state.currentTipo = existing.tipo;
   } else {
@@ -683,8 +831,9 @@ function resetCounters() { state.acInput = 0; state.intInput = 10; render(); }
 function saveSerie() {
   if (!state.selectedPlayerId || state.intInput === 0) return;
   var label = currentSerieLabel();
-  if (!state.data[state.selectedPlayerId]) state.data[state.selectedPlayerId] = {};
-  state.data[state.selectedPlayerId][label] = { tipo: state.currentTipo, ac: state.acInput, int: state.intInput };
+  var bucket = todayBucket();
+  if (!bucket[state.selectedPlayerId]) bucket[state.selectedPlayerId] = {};
+  bucket[state.selectedPlayerId][label] = { tipo: state.currentTipo, ac: state.acInput, int: state.intInput };
   state.saveStatus = "saved";
   saveState();
   if (state.serieIdx < SERIES.length - 1) { state.serieIdx += 1; loadSerieValues(); }
@@ -701,7 +850,7 @@ function setObjetivo(which, pctValue) {
   render();
 }
 function clearAllData() {
-  if (confirm("¿Borrar todos los datos de tiro guardados? Esta acción no se puede deshacer.")) {
+  if (confirm("¿Borrar TODOS los datos de tiro guardados de TODOS los días? Esta acción no se puede deshacer.")) {
     state.data = {};
     saveState();
     render();
@@ -730,6 +879,8 @@ function render() {
   var root = document.getElementById("root");
   var html = "";
 
+  html += '<div class="day-badge">\uD83D\uDCC5 Entrenamiento de hoy \u00b7 ' + todayLabel() + '</div>';
+
   if (state.storageError) {
     html += '<div class="error-banner">No se ha podido guardar el último cambio en este navegador.</div>';
   }
@@ -755,7 +906,7 @@ function render() {
     html += '<span class="label">Serie</span>';
     html += '<div class="grid grid-4">';
     SERIES.forEach(function (label, i) {
-      var saved = (state.data[state.selectedPlayerId] || {})[label];
+      var saved = (todayBucket()[state.selectedPlayerId] || {})[label];
       var active = i === state.serieIdx ? " active" : "";
       html += '<button class="serie-btn' + active + '" data-action="select-serie" data-value="' + i + '">';
       html += '<div class="serie-num">' + (i + 1) + '</div>';
@@ -774,9 +925,10 @@ function render() {
     html += '<div><div class="big-frac">' + state.acInput + '/' + state.intInput + '</div>';
     html += '<div class="big-pct ' + (reached() ? "reached" : "idle") + '">' + (state.intInput > 0 ? Math.round(pct() * 100) + "%" : "—") + '</div></div></div>';
 
-    html += '<div class="grid grid-2" style="margin-bottom:14px;">';
+    html += '<div class="grid grid-3" style="margin-bottom:14px;">';
     html += '<button class="tipo-toggle t2' + (state.currentTipo === "T2" ? " active" : "") + '" data-action="set-tipo" data-value="T2">T2 · obj ' + Math.round(state.objetivos.t2 * 100) + '%</button>';
     html += '<button class="tipo-toggle t3' + (state.currentTipo === "T3" ? " active" : "") + '" data-action="set-tipo" data-value="T3">T3 · obj ' + Math.round(state.objetivos.t3 * 100) + '%</button>';
+    html += '<button class="tipo-toggle tl' + (state.currentTipo === "TL" ? " active" : "") + '" data-action="set-tipo" data-value="TL">TL · obj ' + Math.round(state.objetivos.tl * 100) + '%</button>';
     html += '</div>';
 
     html += '<div class="circles">';
@@ -816,11 +968,11 @@ function render() {
 
   // --- resumen del equipo ---
   html += '<div class="card card-flat">';
-  html += '<button class="summary-toggle" data-action="toggle-table">Resumen del equipo<span>' + (state.showTable ? "▴" : "▾") + '</span></button>';
+  html += '<button class="summary-toggle" data-action="toggle-table">Resumen de hoy<span>' + (state.showTable ? "▴" : "▾") + '</span></button>';
   if (state.showTable) {
-    html += '<div style="overflow-x:auto;border-top:1px solid var(--line);"><table><thead><tr><th>Jugadora</th><th>T2</th><th>T3</th><th>General</th></tr></thead><tbody>';
+    html += '<div style="overflow-x:auto;border-top:1px solid var(--line);"><table><thead><tr><th>Jugadora</th><th>T2</th><th>T3</th><th>TL</th><th>General</th></tr></thead><tbody>';
     state.players.forEach(function (p) {
-      var t2 = totalsFor(p.id, "T2"), t3 = totalsFor(p.id, "T3"), gen = generalFor(p.id);
+      var t2 = totalsFor(p.id, "T2"), t3 = totalsFor(p.id, "T3"), tl = totalsFor(p.id, "TL"), gen = generalFor(p.id);
       function cell(tot, obj) {
         if (tot.int === 0) return '<td class="cell-empty">—</td>';
         var cls = tot.pct >= obj ? "cell-ok" : "cell-bad";
@@ -830,6 +982,7 @@ function render() {
       html += '<tr class="' + rowActive + '" data-action="select-player" data-value="' + esc(p.id) + '"><td>' + esc(p.name) + '</td>';
       html += cell(t2, state.objetivos.t2);
       html += cell(t3, state.objetivos.t3);
+      html += cell(tl, state.objetivos.tl);
       html += gen.int > 0 ? '<td style="font-weight:700;">' + gen.ac + '/' + gen.int + ' · ' + Math.round(gen.pct * 100) + '%</td>' : '<td class="cell-empty">—</td>';
       html += '</tr>';
     });
@@ -844,6 +997,7 @@ function render() {
     html += '<div class="settings-grid">';
     html += '<div><label>Objetivo T2 (%)</label><input type="number" min="0" max="100" value="' + Math.round(state.objetivos.t2 * 100) + '" data-change-action="set-objetivo-t2"></div>';
     html += '<div><label>Objetivo T3 (%)</label><input type="number" min="0" max="100" value="' + Math.round(state.objetivos.t3 * 100) + '" data-change-action="set-objetivo-t3"></div>';
+    html += '<div><label>Objetivo TL (%)</label><input type="number" min="0" max="100" value="' + Math.round(state.objetivos.tl * 100) + '" data-change-action="set-objetivo-tl"></div>';
     html += '</div>';
   }
   html += '<button class="btn-export" data-action="export-excel">⬇ Exportar a Excel</button>';
@@ -883,6 +1037,7 @@ document.addEventListener("change", function (e) {
   var act = e.target.getAttribute && e.target.getAttribute("data-change-action");
   if (act === "set-objetivo-t2") setObjetivo("t2", e.target.value);
   if (act === "set-objetivo-t3") setObjetivo("t3", e.target.value);
+  if (act === "set-objetivo-tl") setObjetivo("tl", e.target.value);
 });
 
 // ---------- init ----------
